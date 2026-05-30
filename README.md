@@ -1,9 +1,20 @@
-# fusion-transcript-workflow
-A reproducible workflow for the detection, translatome-guided prioritization, and functional interpretation of cancer fusion transcripts from RNA-seq data.
-## Supplementary Scripts
+# Fusion Transcript Workflow
 
-Due to chapter space limitations, several data-processing and downstream analysis scripts are provided in this repository.
+Supplementary scripts accompanying the chapter:
 
-- `section3.2_partner_extraction.R` – Extraction and summarization of fusion partner genes from Arriba outputs.
-- `section3.4_anota2seq_run.R` – Differential translational efficiency analysis using anota2seq.
-- `section3.4_partner_translation.R` – Integration of fusion partner genes with translational efficiency results and generation of fusion-partner-specific visualizations.
+"A Workflow for the Detection and Translatome-Guided Prioritization of Cancer Fusion Transcripts"
+
+## Repository Contents
+
+### section3.2_partner_extraction.R
+Extraction and summarization of fusion partner genes from Arriba outputs.
+
+### section3.4_anota2seq_run.R
+Differential translational efficiency analysis using anota2seq.
+
+### section3.4_partner_translation.R
+Integration of fusion partner genes with translational efficiency results and generation of fusion-partner-specific visualizations.
+
+## Notes
+
+The main workflow and methodological details are described in the chapter. This repository contains supplementary scripts that were omitted from the manuscript due to space limitations.
