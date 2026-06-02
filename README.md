@@ -1,20 +1,263 @@
-# Fusion Transcript Workflow
+# Fusion Transcript Workflow: Detection and Translatome-Guided Prioritization of Cancer Fusion Transcripts
 
-Supplementary scripts accompanying the chapter:
+## Overview
 
-"A Workflow for the Detection and Translatome-Guided Prioritization of Cancer Fusion Transcripts"
+This repository accompanies the book chapter:
 
-## Repository Contents
+**"A Workflow for the Detection and Translatome-Guided Prioritization of Cancer Fusion Transcripts"**
 
-### section3.2_partner_extraction.R
-Extraction and summarization of fusion partner genes from Arriba outputs.
+The repository provides supplementary scripts, example workflows, and detailed computational procedures used throughout the chapter. The workflow integrates fusion transcript discovery from RNA sequencing data with translatome-level analyses to prioritize fusion events that are more likely to be functionally translated and biologically relevant.
 
-### section3.4_anota2seq_run.R
-Differential translational efficiency analysis using anota2seq.
+While fusion transcript detection has become routine in cancer transcriptomics, determining which fusion events contribute to the translated proteome remains a major challenge. Transcript-level evidence alone does not distinguish biologically meaningful fusion events from transcriptional noise. To address this limitation, the present workflow combines RNA-seq–based fusion detection with translational efficiency analysis derived from matched translatome datasets.
 
-### section3.4_partner_translation.R
-Integration of fusion partner genes with translational efficiency results and generation of fusion-partner-specific visualizations.
+Using hepatocellular carcinoma (HCC) as a demonstration model, the workflow identifies tumor-specific fusion transcripts, extracts fusion partner genes, evaluates their translational regulation, and prioritizes candidates for downstream biological investigation.
 
-## Notes
+Although the examples presented here utilize the GSE112705 hepatocellular carcinoma dataset, the framework can readily be adapted to other cancer types and datasets containing matched RNA-seq and translatome-level measurements.
 
-The main workflow and methodological details are described in the chapter. This repository contains supplementary scripts that were omitted from the manuscript due to space limitations.
+---
+
+# Workflow Overview
+
+The complete workflow consists of five major analytical stages:
+
+1. RNA-seq preprocessing and quality control
+2. Fusion transcript detection
+3. Fusion partner extraction and filtering
+4. Differential translational efficiency analysis
+5. Fusion partner prioritization
+
+```text
+RNA-seq FASTQ files
+        │
+        ▼
+Quality Control
+(FastQC)
+        │
+        ▼
+STAR Alignment
+        │
+        ▼
+Fusion Detection
+(Arriba / STAR-Fusion)
+        │
+        ▼
+Fusion Partner Extraction
+        │
+        ▼
+Tumor-Specific Filtering
+        │
+        ▼
+Ribo-seq + RNA-seq Counts
+        │
+        ▼
+anota2seq Analysis
+        │
+        ▼
+Fusion Partner Integration
+        │
+        ▼
+Translatome-Guided Prioritization
+```
+
+---
+
+# Repository Structure
+
+```text
+fusion-transcript-workflow/
+│
+├── README.md
+│
+├── scripts/
+│   ├── section3.2_partner_extraction.R
+│   ├── section3.4_anota2seq_run.R
+│   ├── section3.5_partner_translation.R
+│
+├── examples/
+│   ├── example_arriba_output.tsv
+│   ├── example_partner_table.csv
+│   ├── example_anota2seq_results.csv
+│
+├── figures/
+│   ├── workflow_overview.png
+│   ├── partner_translation_scatter.png
+│
+├── docs/
+│   ├── STAR_parameter_guide.tsv
+│   ├── anota2seq_notes.tsv
+│
+└── environment/
+    ├── environment.yml
+    └── sessionInfo.txt
+```
+
+---
+
+# Dataset
+
+The workflow was developed and demonstrated using:
+
+**GSE112705**
+
+Survey of the Translation Shifts in Hepatocellular Carcinoma with Ribosome Profiling
+
+The dataset contains:
+
+* 10 hepatocellular carcinoma samples
+* 10 adjacent non-tumor liver samples
+* matched RNA-seq libraries
+* matched Ribo-seq libraries
+
+The dataset is publicly available through the NCBI Gene Expression Omnibus (GEO).
+
+---
+
+---
+
+# Installation
+
+## Conda Environment
+
+Create a reproducible environment:
+
+```bash
+conda create -n fusion_workflow \
+-c conda-forge \
+-c bioconda \
+nextflow \
+star \
+samtools \
+fastqc \
+sra-tools \
+r-base \
+-y
+```
+
+Activate:
+
+```bash
+conda activate fusion_workflow
+```
+
+---
+
+# Section 3.2 – Fusion Partner Extraction
+
+Script:
+
+```text
+scripts/section3.2_partner_extraction.R
+```
+
+Purpose:
+
+* Import Arriba fusion tables
+* Merge fusion events across samples
+* Annotate tissue information
+* Annotate patient information
+* Generate partner-level summaries
+* Identify tumor-specific fusion partners
+
+Outputs:
+
+```text
+fusion_partner_summary_full.csv
+fusion_partner_tumor_specific.csv
+```
+
+For the GSE112705 dataset, this procedure identified:
+
+* 6,523 tumor-specific fusion partner genes prior to translatome-based prioritization.
+
+---
+
+# Section 3.4 – Differential Translational Efficiency Analysis
+
+Script:
+
+```text
+scripts/section3.4_anota2seq_run.R
+```
+
+Purpose:
+
+* Import translated and total mRNA count matrices
+* Build Anota2seqDataSet objects
+* Perform translational efficiency analysis
+* Classify genes into regulatory modes
+
+Regulatory modes:
+
+* Translation
+* Buffering
+* mRNA abundance
+* Background
+
+Output:
+
+```text
+GSE112705_anota2seq_Results_Cleaned.csv
+```
+
+---
+
+# Section 3.5 – Translational Prioritization of Fusion Partners
+
+Script:
+
+```text
+scripts/section3.5_partner_translation.R
+```
+
+Purpose:
+
+This analysis integrates fusion partner information with translational efficiency results generated by anota2seq.
+
+The workflow:
+
+1. Imports tumor-specific fusion partners.
+2. Imports anota2seq outputs.
+3. Merges both datasets by gene symbol.
+4. Identifies translationally regulated fusion partners.
+5. Generates visualization-ready summary tables.
+6. Produces fusion-partner-specific scatter plots.
+
+Outputs:
+
+```text
+fusion_partner_TE_table.csv
+
+anota2seq_partners_only.csv
+
+partner_mode_summary.csv
+
+fig_1_partner_FC_scatter.pdf
+```
+
+For the demonstration dataset:
+
+* 6,523 tumor-specific fusion partners were identified.
+* 1,904 partners were detectable in the count matrix.
+* 828 partners passed anota2seq filtering and were retained for translational analysis.
+
+---
+
+# STAR Alignment Parameters
+
+Fusion transcript detection requires alignment settings optimized for chimeric read identification.
+
+Detailed explanations of all STAR parameters used in the workflow are available in:
+
+```text
+docs/STAR_parameter_guide.tsv
+```
+
+---
+
+# Citation
+
+If you use this workflow, please cite:
+
+Öztemur Islakoğlu Y, Keleş B, Binokay L, Karakülah G, Atabey N. A Workflow for the Detection and Translatome-Guided Prioritization of Cancer Fusion Transcripts. 
+As well as the original software tools and datasets used throughout the workflow.
+
