@@ -336,6 +336,9 @@ The complete implementation of this step is provided in:
 
 Fusion partner genes are visualized using an anota2seq-style fold-change scatter plot. The horizontal axis represents changes in total mRNA abundance, whereas the vertical axis represents changes in translated mRNA abundance. Genes are coloured according to their assigned regulatory mode and direction of regulation.
 
+<img width="1920" height="1080" alt="CHAPTER_FIGURE" src="https://github.com/user-attachments/assets/8821197d-497c-4365-9a0b-2dde0d6a8756" />
+
+
 This visualization enables rapid identification of fusion partner genes exhibiting translational activation, translational repression, buffering effects, or abundance-driven regulation.
 
 **Output files**
