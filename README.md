@@ -345,9 +345,3 @@ This visualization enables rapid identification of fusion partner genes exhibiti
 * `partner_mode_summary.csv`
 * `fig_1_partner_FC_scatter.pdf`
 * `fig_1_partner_FC_scatter.png`
-
----
-
-# Complete R scripts
-
-The following R scripts are included in the repository and can be executed directly.
