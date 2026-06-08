@@ -8,18 +8,6 @@ The workflow combines RNA-seq-based fusion transcript detection with translatome
 
 ---
 
-## Repository contents
-
-```text
-.
-├── README.md
-├── section3.2_partner_extraction.R
-├── section3.4_anota2seq_run.R
-└── section3.5_partner_translation.R
-```
-
----
-
 ## Workflow overview
 
 ```text
