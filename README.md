@@ -11,7 +11,7 @@ The workflow combines RNA-seq-based fusion transcript detection with translatome
 ## Workflow overview
 
 ```text
-RNA-seq FASTQ files
+RNA-seq FASTQ download
         ↓
 Read quality control
         ↓
