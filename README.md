@@ -237,7 +237,8 @@ nextflow run nf-core/rnafusion -r 4.1.0 \
 The `--tools` argument specifies the fusion callers used in the analysis; here, Arriba and STAR-Fusion are selected. The `--genomes_base` argument defines the reference directory, `--outdir` defines the output directory, and `-resume` allows interrupted or repeated runs to continue from completed workflow steps.
 
 ---
-## 3.2 Fusion Partner Identification
+# 3.2 Fusion Partner Identification
+
 This section identifies recurrent fusion partner genes from Arriba fusion-calling results and generates a tumor-exclusive fusion partner gene set for downstream translatome analyses.
 
 The complete implementation is provided in:
@@ -561,8 +562,3 @@ This visualization facilitates the identification of:
 | partner_mode_summary.csv     | Regulatory mode summary                                      |
 | fig_1_partner_FC_scatter.pdf | Publication-quality figure                                   |
 | fig_1_partner_FC_scatter.png | PNG version of the figure                                    |
-E_table.csv`
-* `anota2seq_partners_only.csv`
-* `partner_mode_summary.csv`
-* `fig_1_partner_FC_scatter.pdf`
-* `fig_1_partner_FC_scatter.png`
