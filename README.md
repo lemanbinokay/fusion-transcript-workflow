@@ -238,112 +238,330 @@ The `--tools` argument specifies the fusion callers used in the analysis; here, 
 
 ---
 ## 3.2 Fusion Partner Identification
+This section identifies recurrent fusion partner genes from Arriba fusion-calling results and generates a tumor-exclusive fusion partner gene set for downstream translatome analyses.
 
-### Step 8. Configure the R Environment and Import Arriba Outputs
+The complete implementation is provided in:
 
-The analysis begins by loading the required R packages and defining the directory containing the Arriba fusion-calling results. All Arriba output files should be stored within a single directory. A sample metadata table is then constructed to map sequencing run identifiers to patient IDs and tissue types, enabling downstream comparison of tumor and normal samples.
+```r
+section3.2_partner_extraction.R
+```
 
-The complete implementation of this step is provided in:
-
-`section3.2_partner_extraction.R`
-
-### Step 9. Merge Fusion Events Across Samples
-
-All Arriba fusion call files are imported and merged into a unified event-level dataset. Fusion-support metrics, breakpoint annotations, confidence levels, and additional Arriba annotations are standardized across samples. Each fusion event is subsequently linked to the corresponding patient and tissue information through the sample metadata table.
-
-The resulting dataset contains one row per fusion event and serves as the foundation for all downstream fusion partner analyses.
-
-### Step 10. Generate Fusion Partner Gene Summaries
-
-Fusion partner genes are extracted from both the 5′ and 3′ breakpoints of each fusion event and transformed into a long-format partner table. Information from all events involving the same gene is then aggregated to generate gene-level summaries.
-
-For each fusion partner gene, recurrence statistics, confidence metrics, breakpoint characteristics, read-support information, and tissue distribution are calculated. This step provides a comprehensive overview of fusion partner occurrence across the entire cohort.
-
-### Step 11. Identify Tumor-Exclusive Fusion Partners
-
-Fusion partner genes are filtered to retain only those detected in tumor samples and absent from all matched normal samples. These tumor-exclusive partners constitute the candidate gene set used for downstream translational analyses.
-
-An optional recurrence filter can be applied to retain only genes observed in multiple tumor samples. To facilitate threshold selection, recurrence summaries and visualization plots are generated across a range of recurrence cutoffs.
-
-**Output files**
-
-* `arriba_events_long.csv`
-* `fusion_partner_events_long.csv`
-* `fusion_partner_summary_full.csv`
-* `fusion_partner_tumor_exclusive.csv`
-* `fusion_partner_summary_filtered.csv`
-* `tumor_exclusive_recurrence_sweep.csv`
-* `tumor_exclusive_recurrence_sweep.png`
+All example input and output files used in this workflow are available in the repository. Users may replace these files with their own Arriba outputs while preserving the same structure.
 
 ---
 
-## 3.4 Differential Translation Efficiency Analysis
+## Step 8. Configure the R Environment and Import Arriba Outputs
 
-### Step 13. Generate Ribo-seq and RNA-seq Quantification Data
+The workflow begins by loading the required R packages and defining the directory containing the Arriba fusion-calling results. Each Arriba result file is associated with a sequencing run identifier, patient identifier, and tissue type (tumor or normal).
 
-Translation efficiency analysis requires matched Ribo-seq and RNA-seq datasets processed through a standardized quantification workflow. Libraries are organized using a sample sheet that specifies sample identifiers, sequencing files, strandedness information, and assay type. Following alignment and quantification, gene-level count matrices are generated for both translated mRNA and total mRNA fractions.
+```r
+library(dplyr)
+library(readr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
 
-### Step 14. Prepare Count Matrices for anota2seq
+arriba_dir <- "path/to/arriba_outputs"
+```
 
-The combined count matrix is imported into R and subjected to quality-control filtering. Gene identifiers are standardized, non-numeric values are removed, and genes containing zero counts across samples are excluded. The filtered matrix is subsequently separated into translated-mRNA (RPF) and total-mRNA (RNA) components.
+A lookup table is then used to map sequencing runs to patient and tissue information, allowing downstream comparisons between tumor and matched normal samples.
 
-Sample conditions and batch information are extracted directly from the library identifiers to support downstream statistical modelling.
+---
 
-The complete implementation of this step is provided in:
+## Step 9. Merge Fusion Events Across Samples
 
-`section3.4_anota2seq_run.R`
+All Arriba fusion-calling results are imported and merged into a unified event-level dataset.
 
-### Step 15. Construct the anota2seq Dataset
+```r
+read_arriba_events <- function(arriba_dir,
+                               pattern = "\\.fusions\\.discarded\\.tsv$") {
 
-The translated-mRNA matrix, total-mRNA matrix, phenotype labels, and batch information are combined into a single anota2seq object. Normalization is performed using the recommended TMM-log2 transformation, providing a unified framework for downstream translational regulation analyses.
+  tsv_files <- list.files(arriba_dir,
+                          pattern = pattern,
+                          full.names = TRUE)
 
-### Step 16. Perform Differential Translation Efficiency Analysis
+  event_list <- lapply(tsv_files, function(tsv) {
 
-Differential translational regulation is assessed using the Analysis of Partial Variance (APV) framework implemented in anota2seq. Translation, buffering, translated-mRNA abundance, and total-mRNA abundance analyses are performed simultaneously, allowing comprehensive characterization of gene regulation between tumor and normal tissues.
+    df <- read_tsv(
+      tsv,
+      comment = "",
+      show_col_types = FALSE,
+      col_types = cols(.default = "c")
+    )
 
-### Step 17. Classify Genes into Regulatory Modes
+    colnames(df)[1] <- sub("^#", "", colnames(df)[1])
 
-Genes are assigned to regulatory categories according to the anota2seq hierarchical classification framework. Each gene is classified into one of four regulatory modes:
+    sample_id <- sub(pattern, "", basename(tsv))
+
+    df %>% mutate(sample_id = sample_id, .before = 1)
+
+  })
+
+  bind_rows(event_list)
+}
+
+arriba_events <- read_arriba_events(arriba_dir)
+```
+
+All columns are initially imported as character variables to avoid type conflicts caused by Arriba missing-value symbols (`.`). Read-support metrics are subsequently converted to numeric values and annotated with patient and tissue information.
+
+The resulting dataset contains one row per fusion event across the entire cohort.
+
+---
+
+## Step 10. Generate Fusion Partner Gene Summaries
+
+Each fusion event contains a 5′ fusion partner (`gene1`) and a 3′ fusion partner (`gene2`). These partners are converted into a long-format representation and summarized at the gene level.
+
+```r
+partner_summary <- partner_long %>%
+  group_by(gene_symbol) %>%
+  summarise(
+    n_samples        = n_distinct(sample_id),
+    n_events         = n(),
+    n_samples_tumor  = n_distinct(sample_id[tissue == "tumor"]),
+    n_samples_normal = n_distinct(sample_id[tissue == "normal"]),
+    .groups = "drop"
+  )
+```
+
+For each fusion partner gene, the workflow calculates recurrence statistics, confidence-level distributions, reading-frame information, breakpoint characteristics, and read-support metrics.
+
+---
+
+## Step 11. Identify Tumor-Exclusive Fusion Partners
+
+Fusion partner genes are filtered to retain only genes detected in tumor samples and absent from matched normal samples.
+
+```r
+partner_tumor_exclusive <- partner_summary %>%
+  filter(
+    n_samples_tumor >= 1,
+    n_samples_normal == 0
+  )
+```
+
+An additional recurrence threshold is applied to prioritize highly recurrent tumor-specific fusion partners. The workflow also evaluates multiple recurrence cutoffs and generates summary plots to assist threshold selection.
+
+### Output Files
+
+| File                                 | Description                        |
+| ------------------------------------ | ---------------------------------- |
+| arriba_events_long.csv               | Unified event-level fusion dataset |
+| fusion_partner_events_long.csv       | Long-format fusion partner table   |
+| fusion_partner_summary_full.csv      | Complete fusion partner summary    |
+| fusion_partner_tumor_exclusive.csv   | Tumor-exclusive fusion partners    |
+| fusion_partner_summary_filtered.csv  | Recurrence-filtered partners       |
+| tumor_exclusive_recurrence_sweep.csv | Recurrence threshold statistics    |
+| tumor_exclusive_recurrence_sweep.png | Recurrence threshold visualization |
+
+---
+
+# 3.4 Differential Translation Efficiency Analysis
+
+This section performs differential translation efficiency analysis using matched RNA-seq and Ribo-seq datasets through the anota2seq framework.
+
+The complete implementation is provided in:
+
+```r
+section3.4_anota2seq_run.R
+```
+
+All example input and output files are available within the repository.
+
+---
+
+## Step 13. Generate Ribo-seq and RNA-seq Quantification Data
+
+Gene-level RNA-seq and Ribo-seq count matrices are generated following alignment and quantification. These count matrices serve as the input for differential translation efficiency analysis.
+
+---
+
+## Step 14. Prepare Count Matrices for anota2seq
+
+The combined count matrix is imported into R and subjected to quality-control filtering.
+
+```r
+dat <- read.csv(
+  "GSE112705_RPF_RNA_readCounts.csv",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
+
+dat$Gene_name <- make.unique(as.character(dat$Gene_name))
+rownames(dat) <- dat$Gene_name
+```
+
+Genes containing zero counts across samples are removed prior to analysis.
+
+The matrix is then separated into translated mRNA (RPF) and total mRNA (RNA) datasets.
+
+```r
+my_data_P <- dat_sorted[, grep("RPF", colnames(dat_sorted))]
+my_data_T <- dat_sorted[, grep("RNA", colnames(dat_sorted))]
+```
+
+Phenotype labels and batch information are automatically extracted from sample identifiers.
+
+---
+
+## Step 15. Construct the anota2seq Dataset
+
+The RNA-seq and Ribo-seq matrices are combined into a single anota2seq object.
+
+```r
+ads <- anota2seqDataSetFromMatrix(
+  dataP = as.matrix(my_data_P),
+  dataT = as.matrix(my_data_T),
+  phenoVec = myPheno,
+  batchVec = myBatch,
+  dataType = "RNAseq",
+  normalize = TRUE,
+  transformation = "TMM-log2"
+)
+```
+
+Normalization is performed using the recommended TMM-log2 strategy.
+
+---
+
+## Step 16. Perform Differential Translation Efficiency Analysis
+
+Differential translational regulation is evaluated using the Analysis of Partial Variance (APV) framework.
+
+```r
+ads <- anota2seqAnalyze(
+  Anota2seqDataSet = ads,
+  contrasts = myContrast,
+  analysis = c(
+    "translation",
+    "buffering",
+    "translated mRNA",
+    "total mRNA"
+  )
+)
+```
+
+The workflow simultaneously evaluates:
+
+* Translation efficiency
+* Buffering effects
+* Translated mRNA abundance
+* Total mRNA abundance
+
+---
+
+## Step 17. Classify Genes into Regulatory Modes
+
+Genes are assigned to regulatory categories according to the anota2seq hierarchical framework.
+
+```r
+runAds <- anota2seqRegModes(runAds)
+
+dataOut <- anota2seqGetOutput(
+  runAds,
+  output = "singleDf",
+  selContrast = 1
+)
+```
+
+Genes are classified into:
 
 * Translation
 * Buffering
 * Abundance
 * Background
 
-The resulting dataset provides the basis for identifying translationally regulated fusion partner genes.
+### Output Files
 
-**Output files**
-
-* `GSE112705_anota2seq_Results_Cleaned.csv`
-* `GSE112705_PreAnalysis_PCA.pdf`
-* `GSE112705_RegulatoryModes_Scatter.png`
+| File                                    | Description                            |
+| --------------------------------------- | -------------------------------------- |
+| GSE112705_anota2seq_Results_Cleaned.csv | Final differential translation results |
+| GSE112705_PreAnalysis_PCA.pdf           | PCA quality-control report             |
+| GSE112705_RegulatoryModes_Scatter.png   | Regulatory mode visualization          |
 
 ---
 
-## 3.5 Translatome-Guided Prioritization of Fusion Partner Genes
+# 3.5 Translatome-Guided Prioritization of Fusion Partner Genes
 
-### Step 18. Integrate Fusion Partners with Translation Efficiency Results
+This section integrates tumor-exclusive fusion partner genes with translation-efficiency results to identify fusion-associated genes exhibiting evidence of translational regulation.
 
-Tumor-exclusive fusion partner genes are integrated with the anota2seq results to identify fusion-associated genes displaying evidence of translational regulation. Gene-level translation efficiency statistics, abundance changes, buffering effects, and regulatory mode assignments are merged into a unified dataset.
+The complete implementation is provided in:
 
-Summary tables are generated to facilitate downstream interpretation of translationally regulated fusion partners and to quantify the distribution of regulatory modes across recurrence categories.
+```r
+section3.5_partner_translation.R
+```
 
-The complete implementation of this step is provided in:
+All example input and output files are available within the repository.
 
-`section3.5_partner_translation.R`
+---
 
-### Step 19. Visualize Translational Regulation of Fusion Partner Genes
+## Step 18. Integrate Fusion Partners with Translation Efficiency Results
 
-Fusion partner genes are visualized using an anota2seq-style fold-change scatter plot. The horizontal axis represents changes in total mRNA abundance, whereas the vertical axis represents changes in translated mRNA abundance. Genes are coloured according to their assigned regulatory mode and direction of regulation.
+Tumor-exclusive fusion partners generated in Section 3.2 are merged with the translation-efficiency results generated in Section 3.4.
 
-<img width="1920" height="1080" alt="CHAPTER_FIGURE" src="https://github.com/user-attachments/assets/8821197d-497c-4365-9a0b-2dde0d6a8756" />
+```r
+partner_TE <- partner_raw %>%
+  inner_join(anota_raw, by = "gene_symbol")
+```
 
+The resulting table combines fusion recurrence statistics with translational regulation measurements.
 
-This visualization enables rapid identification of fusion partner genes exhibiting translational activation, translational repression, buffering effects, or abundance-driven regulation.
+A fusion-partner-only translation-efficiency table is then generated.
 
-**Output files**
+```r
+anota_partners_only <- partner_TE %>%
+  select(
+    gene_symbol,
+    translatedmRNA.apvEff,
+    totalmRNA.apvEff,
+    translation.apvEff,
+    buffering.apvEff,
+    singleRegMode
+  )
+```
 
-* `fusion_partner_TE_table.csv`
+Regulatory-mode distributions are subsequently summarized.
+
+```r
+mode_summary <- partner_TE %>%
+  count(recurrence_tier, singleRegMode)
+```
+
+---
+
+## Step 19. Visualize Translational Regulation of Fusion Partner Genes
+
+Fusion partner genes are visualized using an anota2seq-style fold-change scatter plot.
+
+```r
+fig_A <- ggplot(
+  fp_df,
+  aes(deltaT, deltaP, colour = group)
+) +
+  geom_point() +
+  theme_classic()
+```
+
+The horizontal axis represents total mRNA abundance changes, whereas the vertical axis represents translated mRNA abundance changes. Genes are coloured according to their assigned regulatory mode and direction of regulation.
+
+This visualization facilitates the identification of:
+
+* Translational activation
+* Translational repression
+* Buffering effects
+* Abundance-driven regulation
+
+### Output Files
+
+| File                         | Description                                                  |
+| ---------------------------- | ------------------------------------------------------------ |
+| fusion_partner_TE_table.csv  | Integrated fusion partner and translation-efficiency results |
+| anota2seq_partners_only.csv  | Translation-efficiency results restricted to fusion partners |
+| partner_mode_summary.csv     | Regulatory mode summary                                      |
+| fig_1_partner_FC_scatter.pdf | Publication-quality figure                                   |
+| fig_1_partner_FC_scatter.png | PNG version of the figure                                    |
+E_table.csv`
 * `anota2seq_partners_only.csv`
 * `partner_mode_summary.csv`
 * `fig_1_partner_FC_scatter.pdf`
